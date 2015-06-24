@@ -3,19 +3,28 @@ package com.tempcompany.smstemp;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.database.Cursor;
+import android.net.Uri;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.telephony.SmsManager;
+import android.text.Html;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.Toast;
+
+import java.util.ArrayList;
 
 
 public class MainActivity extends ActionBarActivity {
@@ -24,6 +33,17 @@ public class MainActivity extends ActionBarActivity {
     private EditText phoneNumTxt;
     private EditText msgTxt;
     private String toastMessage;
+
+    private static final String INBOX_URI = "content://sms/inbox";
+
+    private static MainActivity activity;
+    private ArrayList<String> smsList = new ArrayList<String>();
+    private ListView mListView;
+    private ArrayAdapter<String> adapter;
+
+    public static MainActivity instance() {
+        return activity;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,17 +63,29 @@ public class MainActivity extends ActionBarActivity {
                             sendSMS(phoneNum, msg, getApplicationContext()),
                             Toast.LENGTH_SHORT).show();
                 }
-                    //String toastMsg = new SMS().mSendSMS(phoneNum, msg);
+                //String toastMsg = new SMS().mSendSMS(phoneNum, msg);
 
                 else {
 
                     Toast.makeText(getBaseContext(),
-                           "Please enter a valid phone number and a message",
+                            "Please enter a valid phone number and a message",
                             Toast.LENGTH_SHORT).show();
                 }
 
             }
         });
+        mListView = (ListView) findViewById(R.id.list);
+        adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, smsList);
+        mListView.setAdapter(adapter);
+        mListView.setOnItemClickListener(MyItemClickListener);
+
+        readSMS();
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        activity = this;
     }
 
 
@@ -140,5 +172,45 @@ public class MainActivity extends ActionBarActivity {
         return toastMessage;
 
     }
+
+    public void readSMS() {
+        ContentResolver contentResolver = getContentResolver();
+        Cursor smsInboxCursor = contentResolver.query(Uri.parse(INBOX_URI), null, null, null, null);
+
+        int senderIndex = smsInboxCursor.getColumnIndex("address");
+        int messageIndex = smsInboxCursor.getColumnIndex("body");
+
+        if (messageIndex < 0 || !smsInboxCursor.moveToFirst()) return;
+
+        adapter.clear();
+
+        do {
+
+            String sender = smsInboxCursor.getString(senderIndex);
+            String message = smsInboxCursor.getString(messageIndex);
+
+            String formattedText = String.format(getResources().getString(R.string.sms_message), sender, message);
+
+            adapter.add(Html.fromHtml(formattedText).toString());
+        } while (smsInboxCursor.moveToNext());
+    }
+
+    public void updateList(final String newSms) {
+        adapter.insert(newSms, 0);
+        adapter.notifyDataSetChanged();
+    }
+
+    private AdapterView.OnItemClickListener MyItemClickListener = new AdapterView.OnItemClickListener() {
+
+        @Override
+        public void onItemClick(AdapterView<?> parent, View view, int pos, long id) {
+            try {
+                Toast.makeText(getApplicationContext(), adapter.getItem(pos), Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+    };
 
 }
